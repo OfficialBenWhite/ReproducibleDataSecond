@@ -45,3 +45,39 @@ Use read.csv() to read the file into memory. This section is cached because it i
 stormData <- read.csv(file)
 ```
 
+As per this link: 
+https://www.ncdc.noaa.gov/stormevents/details.jsp
+Filter out any event that happened before 1996 because not all variables were recorded before then
+
+```{r}
+stormData$date<- mdy_hms(stormData$BGN_DATE)
+stormData2 <- subset(stormData, stormData$date > mdy("12/31/1995"))
+```
+
+Combine the PROPDMG and CROPDMG columns with their multipliers.
+Page 12 of https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2Fpd01016005curr.pdf
+states that:
+" Alphabetical characters used to signify magnitude
+include “K” for thousands, “M” for millions, and “B” for billions. "
+
+Looking at the number of each value it makes sense to remove anything else
+```{r}
+table(stormData2$PROPDMGEXP)
+```
+
+Therefore subsetting out everything that is not K , M, B or blank in the exponential columns.
+
+
+
+The following tells us that the bad inputs are constant across the rows. This means it is an erroneous row, like a summary row.
+```{r}
+identical(stormData2$CROPDMGEXP %in% c("K","M","B",""), stormData2$PROPDMGEXP %in% c("K","M","B",""))
+```
+
+Subsetting on the good values and then transforming the variables to their exponents
+
+```{r}
+indx <- stormData2$CROPDMGEXP %in% c("K","M","B","")
+stormData3 <- stormData2[!indx,]
+stormData3[stormData3$CROPDMGEXP == "K"]$crop
+```
