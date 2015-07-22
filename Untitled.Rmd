@@ -1,0 +1,47 @@
+---
+title: Analysis of historic data to identify areas in which resources should be prioritised
+  in the event of a storm.
+author: "OfficialBenWhite"
+date: "20 July 2015"
+output: html_document
+keep_md: true
+---
+
+Synposis goes here.
+
+##Data Processing
+
+Load packages
+```{r}
+library(ggplot2)
+library(lubridate)
+library(dplyr)
+```
+
+Next download the storm data from the NOAA Storm Database
+
+Set the working directory, the file variable and the url.
+
+```{r}
+library(ggplot2)
+library(lubridate)
+library(dplyr)
+setwd("/Users/bw/RCourse/C5W3")
+file <- "StormData.csv.bz2"
+url <- "https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2"
+```
+
+Checks if file is downloaded otherwise download it.
+
+```{r}
+if(!file.exists(file)){   
+    download.file(url,file, method="curl")
+}
+```
+
+Use read.csv() to read the file into memory. This section is cached because it is computionally expensive. 
+
+```{r, cache=TRUE}
+stormData <- read.csv(file)
+```
+
