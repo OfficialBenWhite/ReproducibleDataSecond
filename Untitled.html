@@ -102,7 +102,118 @@ url &lt;- &quot;https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData
     download.file(url,file, method=&quot;curl&quot;)
 }</code></pre>
 <p>Use read.csv() to read the file into memory. This section is cached because it is computionally expensive.</p>
-<pre class="r"><code>stormData &lt;- read.csv(file)</code></pre>
+<pre class="r"><code>stormData &lt;- read.csv(file)
+#stormData0 &lt;- read.table(file, sep = &quot;,&quot;, na.strings = &quot; &quot;, header = TRUE)</code></pre>
+<p>As per this link: <a href="https://www.ncdc.noaa.gov/stormevents/details.jsp" class="uri">https://www.ncdc.noaa.gov/stormevents/details.jsp</a> Filter out any event that happened before 1996 because not all variables were recorded before then</p>
+<pre class="r"><code>stormData$date&lt;- mdy_hms(stormData$BGN_DATE)
+stormData2 &lt;- subset(stormData, stormData$date &gt; mdy(&quot;12/31/1995&quot;))</code></pre>
+<p>Combine the PROPDMG and CROPDMG columns with their multipliers. Page 12 of <a href="https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2Fpd01016005curr.pdf">https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2Fpd01016005curr.pdf</a> states that: &quot; Alphabetical characters used to signify magnitude include “K” for thousands, “M” for millions, and “B” for billions. &quot;</p>
+<p>Looking at the number of each value it makes sense to remove anything else</p>
+<pre class="r"><code>table(stormData2$PROPDMGEXP)</code></pre>
+<pre><code>## 
+##             -      ?      +      0      1      2      3      4      5 
+## 276185      0      0      0      1      0      0      0      0      0 
+##      6      7      8      B      h      H      K      m      M 
+##      0      0      0     32      0      0 369938      0   7374</code></pre>
+<p>Therefore subsetting out everything that is not K , M, B or blank in the exponential columns.</p>
+<p>Subsetting on the good values and then transforming the variables to their exponents</p>
+<pre class="r"><code>indx  &lt;- stormData2$CROPDMGEXP %in% c(&quot;K&quot;,&quot;M&quot;,&quot;B&quot;,&quot; &quot;, &quot;&quot;)
+indx2 &lt;- stormData2$PROPDMGEXP  %in% c(&quot;K&quot;,&quot;M&quot;,&quot;B&quot;,&quot; &quot;, &quot;&quot;)
+importantColumns &lt;- c(&quot;date&quot;, &quot;EVTYPE&quot;, &quot;FATALITIES&quot;, &quot;INJURIES&quot;, &quot;PROPDMG&quot;, &quot;PROPDMGEXP&quot;, &quot;CROPDMG&quot;, &quot;CROPDMGEXP&quot;)
+df &lt;- stormData2[(indx &amp;&amp; indx2), importantColumns]</code></pre>
+<p>Translate the exponents into numbers.w</p>
+<pre class="r"><code>df$cropdmgexpn[df$CROPDMGEXP == &quot;K&quot;] &lt;- 1000
+df$cropdmgexpn[df$CROPDMGEXP == &quot;M&quot;] &lt;- 1e+06
+df$cropdmgexpn[df$CROPDMGEXP == &quot;B&quot;] &lt;- 1e+09
+df$propdmgexpn[df$PROPDMGEXP == &quot;K&quot;] &lt;- 1000
+df$propdmgexpn[df$PROPDMGEXP == &quot;M&quot;] &lt;- 1e+06
+df$propdmgexpn[df$PROPDMGEXP == &quot;B&quot;] &lt;- 1e+09</code></pre>
+<p>Create new columns for crop damage and property damage with exponents included</p>
+<pre class="r"><code>df$cropdmg = df$cropdmgexpn * df$CROPDMG
+df$propdmg = df$propdmgexpn * df$PROPDMG</code></pre>
+<p>Now group by EVTYPE and sum the data.</p>
+<pre class="r"><code>grp &lt;- group_by(df, EVTYPE)
+sumdf &lt;- summarise(grp, fatalities = sum(FATALITIES, na.rm = TRUE), injuries = sum(INJURIES, na.rm = TRUE), cropdamage = sum(cropdmg, na.rm = TRUE), propdamage = sum(propdmg, na.rm = TRUE), count = n())
+
+sumdf &lt;- df %&gt;%
+    group_by(EVTYPE)  %&gt;%
+    summarise(fatalities = sum(FATALITIES, na.rm = TRUE), 
+              injuries = sum(INJURIES, na.rm = TRUE), 
+              cropdamage = sum(cropdmg, na.rm = TRUE), 
+              propdamage = sum(propdmg, na.rm = TRUE), 
+              count = n())  %&gt;%
+    mutate(rel.freq = paste0(round(100 * count/sum(count), 0), &quot;%&quot;))</code></pre>
+<p>Lets see the most fatal event type</p>
+<pre class="r"><code>knitr::kable(head(arrange(sumdf, desc(fatalities))))</code></pre>
+<table>
+<thead>
+<tr class="header">
+<th align="left">EVTYPE</th>
+<th align="right">fatalities</th>
+<th align="right">injuries</th>
+<th align="right">cropdamage</th>
+<th align="right">propdamage</th>
+<th align="right">count</th>
+<th align="left">rel.freq</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">EXCESSIVE HEAT</td>
+<td align="right">1797</td>
+<td align="right">6391</td>
+<td align="right">492402000</td>
+<td align="right">7723700</td>
+<td align="right">1656</td>
+<td align="left">0%</td>
+</tr>
+<tr class="even">
+<td align="left">TORNADO</td>
+<td align="right">1511</td>
+<td align="right">20667</td>
+<td align="right">283425010</td>
+<td align="right">24616945710</td>
+<td align="right">23154</td>
+<td align="left">4%</td>
+</tr>
+<tr class="odd">
+<td align="left">FLASH FLOOD</td>
+<td align="right">887</td>
+<td align="right">1674</td>
+<td align="right">1334901700</td>
+<td align="right">15222203910</td>
+<td align="right">50999</td>
+<td align="left">8%</td>
+</tr>
+<tr class="even">
+<td align="left">LIGHTNING</td>
+<td align="right">651</td>
+<td align="right">4141</td>
+<td align="right">6898440</td>
+<td align="right">743077080</td>
+<td align="right">13203</td>
+<td align="left">2%</td>
+</tr>
+<tr class="odd">
+<td align="left">FLOOD</td>
+<td align="right">414</td>
+<td align="right">6758</td>
+<td align="right">4974778400</td>
+<td align="right">143944833550</td>
+<td align="right">24247</td>
+<td align="left">4%</td>
+</tr>
+<tr class="even">
+<td align="left">RIP CURRENT</td>
+<td align="right">340</td>
+<td align="right">209</td>
+<td align="right">0</td>
+<td align="right">1000</td>
+<td align="right">432</td>
+<td align="left">0%</td>
+</tr>
+</tbody>
+</table>
 </div>
 
 
