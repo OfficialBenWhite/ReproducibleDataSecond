@@ -3,18 +3,20 @@ title: Analysis of historic data to identify areas in which resources should be 
   in the event of a storm.
 author: "OfficialBenWhite"
 date: "20 July 2015"
-output: html_document
-keep_md: true
+output: 
+html_document:
+    keep_md: true
 ---
 
-Synposis goes here.
+The aim of this assignment was to investigate the NOAA storm database and try to make inferences using historic data, about how resources should be allocated to lessen the damage of a environmental event in the future.
 
 ##Data Processing
 
 Load packages
-```{r}
+```{r, results='hide'}
 library(ggplot2)
 library(lubridate)
+library(reshape2)
 library(dplyr)
 ```
 
@@ -23,9 +25,6 @@ Next download the storm data from the NOAA Storm Database
 Set the working directory, the file variable and the url.
 
 ```{r}
-library(ggplot2)
-library(lubridate)
-library(dplyr)
 setwd("/Users/bw/RCourse/C5W3")
 file <- "StormData.csv.bz2"
 url <- "https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2"
@@ -39,16 +38,15 @@ if(!file.exists(file)){
 }
 ```
 
-Use read.csv() to read the file into memory. This section is cached because it is computionally expensive. 
+Use read.csv() to read the file into memory. 
 
 ```{r, cache=TRUE}
 stormData <- read.csv(file)
-#stormData0 <- read.table(file, sep = ",", na.strings = " ", header = TRUE)
 ```
 
 As per this link: 
 https://www.ncdc.noaa.gov/stormevents/details.jsp
-Filter out any event that happened before 1996 because not all variables were recorded before then
+Filter out any event that happened before 1996 because not all events were accurately recorded before then.
 
 ```{r}
 stormData$date<- mdy_hms(stormData$BGN_DATE)
@@ -56,19 +54,16 @@ stormData2 <- subset(stormData, stormData$date > mdy("12/31/1995"))
 ```
 
 Combine the PROPDMG and CROPDMG columns with their multipliers.
-Page 12 of https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2Fpd01016005curr.pdf
-states that:
-" Alphabetical characters used to signify magnitude
-include “K” for thousands, “M” for millions, and “B” for billions. "
+Page 12 of https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2Fpd01016005curr.pdf states that:" Alphabetical characters used to signify magnitude include “K” for thousands, “M” for millions, and “B” for billions. "
+Looking at each value and remove any anomolies.
 
-Looking at the number of each value it makes sense to remove anything else
 ```{r}
 table(stormData2$PROPDMGEXP)
 ```
 
 Therefore subsetting out everything that is not K , M, B or blank in the exponential columns.
 
-Subsetting on the good values and then transforming the variables to their exponents
+Subset on the good values.
 
 ```{r}
 indx  <- stormData2$CROPDMGEXP %in% c("K","M","B"," ", "")
@@ -78,7 +73,8 @@ df <- stormData2[(indx && indx2), importantColumns]
 ```
 
 
-Translate the exponents into numbers.w
+Translate the exponents into numbers.
+
 ```{r}
 df$cropdmgexpn[df$CROPDMGEXP == "K"] <- 1000
 df$cropdmgexpn[df$CROPDMGEXP == "M"] <- 1e+06
@@ -88,13 +84,14 @@ df$propdmgexpn[df$PROPDMGEXP == "M"] <- 1e+06
 df$propdmgexpn[df$PROPDMGEXP == "B"] <- 1e+09
 ```
 
-Create new columns for crop damage and property damage with exponents included
+Create new columns for crop damage and property damage with exponents included.
+
 ```{r}
 df$cropdmg = df$cropdmgexpn * df$CROPDMG
 df$propdmg = df$propdmgexpn * df$PROPDMG
 ```
 
-Now group by EVTYPE and sum the data.
+Now group by EVTYPE and sum the data. Also add relative frequency and count.
 
 ```{r}
 grp <- group_by(df, EVTYPE)
@@ -105,12 +102,47 @@ sumdf <- df %>%
     summarise(fatalities = sum(FATALITIES, na.rm = TRUE), 
               injuries = sum(INJURIES, na.rm = TRUE), 
               cropdamage = sum(cropdmg, na.rm = TRUE), 
-              propdamage = sum(propdmg, na.rm = TRUE), 
+              propdamage = sum(propdmg, na.rm = TRUE),
+              totaldamage = (sum(propdmg, na.rm = TRUE) + 
+                                 sum(cropdmg, na.rm = TRUE)),
               count = n())  %>%
     mutate(rel.freq = paste0(round(100 * count/sum(count), 0), "%"))
 ```
 
-Lets see the most fatal event type
+##Results
+
+The most fatal events:
+
 ```{r, results='asis'}
-knitr::kable(head(arrange(sumdf, desc(fatalities)) n = 15))
+knitr::kable(head(arrange(sumdf, desc(fatalities)), n = 6 ) )
 ```
+
+Now by injury
+
+```{r, results='asis'}
+knitr::kable(head(arrange(sumdf, desc(injuries)), n = 6 ) )
+```
+
+Now by total damage
+
+```{r, results='asis'}
+knitr::kable(head(arrange(sumdf, desc(totaldamage)), n = 6 ) )
+```
+
+Plot a chart of total damage with the fill as the the damage type.
+
+```{r, fig.align='center'}
+df2 <- head(arrange(sumdf, desc(totaldamage)), n = 10)
+df3 <- df2[,c("EVTYPE", "propdamage", "cropdamage")]
+df4 <- melt(df3, id.vars = "EVTYPE")
+ggplot(df4, aes(x = reorder(EVTYPE,-value), y = value/1000000, fill = variable)) + 
+    geom_bar(stat = "identity") +
+    xlab("Event Type") +
+    theme(axis.text.x = element_text(angle = 45, size=8, 
+                                     hjust = 1, vjust = 1)) +
+     ylab("Total Damage (millions of USD)") +
+    ggtitle("Aggregated property and crop damage \nfor weather events from 1996-2011")
+    
+```
+
+As can be seen from the data, floods are catastrophic in terms of their lethalness and destructiveness. Perhaps its wise to allocate available resources to preventative measures such as building flood protection.
