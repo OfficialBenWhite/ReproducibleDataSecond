@@ -114,8 +114,12 @@ sumdf <- df %>%
 The most fatal events:
 
 ```{r, results='asis'}
-knitr::kable(head(arrange(sumdf, desc(fatalities)), n = 6 ) )
+fatals <- head(arrange(sumdf, desc(fatalities)), n = 6 )
+fatal <- fatals$EVTYPE[1]
+knitr::kable(fatals)
 ```
+
+As can be seen `r fatal` is the most fatal event type.
 
 Now by injury
 
@@ -144,5 +148,7 @@ ggplot(df4, aes(x = reorder(EVTYPE,-value), y = value/1000000, fill = variable))
     ggtitle("Aggregated property and crop damage \nfor weather events from 1996-2011")
     
 ```
+
+##Conclusion
 
 As can be seen from the data, floods are catastrophic in terms of their lethalness and destructiveness. Perhaps its wise to allocate available resources to preventative measures such as building flood protection.
